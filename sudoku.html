@@ -1,262 +1,412 @@
 <!doctype html>
 <html lang="de">
 <head>
-    <meta charset="utf-8" />
-    <title>Sudoku</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <style>
-        :root {
-            --cell-size: 48px;
-            --gap: 2px;
-            --fixed-bg: #e9e9e9;
-            --invalid-border: #e05;
-            --ok-border: #6a6;
-        }
-        body { font-family: system-ui, sans-serif; display:flex; gap:20px; padding:20px; }
-        .board {
-            display: grid;
-            grid-template-columns: repeat(9, var(--cell-size));
-            grid-template-rows: repeat(9, var(--cell-size));
-            gap: var(--gap);
-            border: 3px solid #333;
-            padding: 6px;
-            background: #fff;
-        }
-        .cell {
-            width: var(--cell-size);
-            height: var(--cell-size);
-            box-sizing: border-box;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            position:relative;
-        }
-        .cell input {
-            width:100%; height:100%; text-align:center; font-size:20px; border:1px solid #bbb;
-            outline:none; appearance:none;
-            background: transparent;
-        }
-        .cell.fixed input { background: var(--fixed-bg); font-weight:700; }
-        /* thicker box borders */
-        .cell.row-sep-top { border-top:3px solid #333; }
-        .cell.row-sep-bottom { border-bottom:3px solid #333; }
-        .cell.col-sep-left { border-left:3px solid #333; }
-        .cell.col-sep-right { border-right:3px solid #333; }
-        .cell.invalid input { border-color: var(--invalid-border); background: rgba(255,200,200,0.4); }
-        .controls { display:flex; flex-direction:column; gap:8px; min-width:220px; }
-        button { padding:8px 12px; font-size:14px; }
-        .status { padding:8px; border:1px solid #ccc; min-height:40px; }
-        .small { font-size:13px; color:#444; }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sudoku — Logisches Rätsel</title>
+<style>
+    :root{
+        --cell-size: 56px;
+        --gap: 0;
+        --bg: #f7f7fb;
+        --given-bg: #e9eefc;
+        --sel-bg: #fff9c4;
+        --conflict-bg: #ffd6d6;
+        --note-size: calc(var(--cell-size) / 3);
+        --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    html,body{height:100%;margin:0;font-family:var(--font-sans);background:var(--bg);display:flex;align-items:center;justify-content:center}
+    .container{width:calc(var(--cell-size)*9 + 20px);padding:10px;background:white;border-radius:8px;box-shadow:0 6px 20px rgba(20,20,40,0.08)}
+    h1{margin:0 0 10px;font-size:18px;text-align:center}
+    .board{display:grid;grid-template-columns:repeat(9,var(--cell-size));grid-template-rows:repeat(9,var(--cell-size));gap:var(--gap);border:2px solid #222;margin:6px auto}
+    .cell{
+        box-sizing:border-box;border:1px solid rgba(0,0,0,0.12);width:var(--cell-size);height:var(--cell-size);
+        display:flex;align-items:center;justify-content:center;position:relative;background:white;cursor:pointer;
+    }
+    /* block thicker borders */
+    .cell[data-r="2"], .cell[data-r="5"]{border-bottom-width:2px}
+    .cell[data-c="2"], .cell[data-c="5"]{border-right-width:2px}
+    .given{background:var(--given-bg);font-weight:700}
+    .selected{background:var(--sel-bg);outline:2px solid rgba(0,0,0,0.05)}
+    .conflict{background:var(--conflict-bg)}
+    .value{font-size:20px;user-select:none}
+    .controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+    button{padding:8px 10px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:white;cursor:pointer}
+    .toggle{display:inline-flex;align-items:center;gap:6px;padding:6px 8px}
+    .notes{position:absolute;inset:6px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);font-size:10px;color:#444;align-items:center;justify-items:center}
+    .note-hidden{display:none}
+    .small{font-size:13px}
+    .footer{font-size:12px;color:#666;text-align:center;margin-top:8px}
+    .btn-danger{background:#ffecec;border-color:#ffb4b4}
+    .btn-primary{background:#eef6ff;border-color:#cfe8ff}
+    input[type="range"]{width:140px}
+</style>
 </head>
 <body>
-    <div>
-        <div class="board" id="board" aria-label="Sudoku-Brett"></div>
-        <div style="margin-top:10px; display:flex; gap:8px;">
-            <button id="resetBtn">Leeren</button>
-            <button id="exampleBtn">Beispiel laden</button>
-            <button id="validateBtn">Prüfen</button>
-        </div>
-    </div>
+<div class="container" role="application" aria-label="Sudoku">
+    <h1>Sudoku — Logisch lösen</h1>
+    <div id="board" class="board" aria-hidden="false"></div>
 
     <div class="controls">
-        <div class="status" id="status">Status: Bereit</div>
-        <div class="small">
-            Regeln: Jede Zahl 1–9 darf in jeder Zeile, Spalte und 3×3-Box nur einmal vorkommen.<br>
-            Eingabe: Ziffer 1–9 oder Rückschritt/Entf.
+        <button id="newEasy">Neu (einfach)</button>
+        <button id="newMed">Neu (mittel)</button>
+        <button id="newHard">Neu (schwer)</button>
+        <button id="solve" class="btn-primary">Lösen</button>
+        <button id="check">Prüfen</button>
+        <button id="clear" class="btn-danger">Zurücksetzen</button>
+        <label class="toggle"><input id="notesToggle" type="checkbox"> Notizen</label>
+        <div style="display:flex;gap:4px;align-items:center">
+            <span class="small">Leeren entfernen</span>
+            <input id="cluesRange" type="range" min="22" max="36" value="28">
         </div>
     </div>
 
-    <script>
-        // GitHub Copilot: kompakte Implementierung der Kernfunktionen
-        const boardEl = document.getElementById('board');
-        const statusEl = document.getElementById('status');
-        const SIZE = 9;
-        const fixed = Array.from({length: SIZE}, ()=>Array(SIZE).fill(false));
+    <div style="display:flex;gap:4px;justify-content:center;margin-top:8px">
+        <div style="display:grid;grid-template-columns:repeat(9,28px);gap:4px">
+            <!-- number buttons 1..9 -->
+            <script>/* placeholder */</script>
+        </div>
+    </div>
 
-        function createBoard() {
-            boardEl.innerHTML = '';
-            for (let r=0;r<SIZE;r++){
-                for (let c=0;c<SIZE;c++){
-                    const cell = document.createElement('div');
-                    cell.className = 'cell';
-                    // thicker separators for 3x3 boxes
-                    if (r%3===0) cell.classList.add('row-sep-top');
-                    if (r===SIZE-1) cell.classList.add('row-sep-bottom');
-                    if (c%3===0) cell.classList.add('col-sep-left');
-                    if (c===SIZE-1) cell.classList.add('col-sep-right');
+    <div style="display:flex;gap:4px;justify-content:center;margin-top:8px" id="numbersRow"></div>
+    <div class="footer">Klicken = Zahl setzen / Notizen. Rechtsklick löscht. Die Erzeugung garantiert eindeutige Lösung (backtracking).</div>
+</div>
 
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.inputMode = 'numeric';
-                    input.maxLength = 1;
-                    input.dataset.row = r;
-                    input.dataset.col = c;
-                    input.autocomplete = 'off';
-                    input.spellcheck = false;
+<script>
+/* Sudoku implementation:
+     - generates full solution by backtracking
+     - removes cells to desired clue count ensuring uniqueness (solver counts <=1)
+     - supports notes (pencil marks), conflict highlight, check, solve, reset
+*/
 
-                    input.addEventListener('keydown', onKeyDown);
-                    input.addEventListener('input', onInput);
+const SIZE = 9;
+const boardEl = document.getElementById('board');
+let solution = createEmpty();
+let puzzle = createEmpty(); // null or number
+let given = createEmpty(false); // boolean flags
+let notes = Array.from({length:81}, ()=> new Set());
+let selected = -1;
+let notesMode = false;
+const cluesRange = document.getElementById('cluesRange');
 
-                    cell.appendChild(input);
-                    boardEl.appendChild(cell);
+function createEmpty(fill=null){
+    const a = new Array(SIZE*SIZE);
+    for(let i=0;i<a.length;i++) a[i]=fill;
+    return a;
+}
+function createEmptyBool(fill=false){
+    const a = new Array(SIZE*SIZE);
+    for(let i=0;i<a.length;i++) a[i]=fill;
+    return a;
+}
+
+// render grid
+function buildGrid(){
+    boardEl.innerHTML='';
+    for(let r=0;r<9;r++){
+        for(let c=0;c<9;c++){
+            const idx = r*9+c;
+            const cell = document.createElement('div');
+            cell.className='cell';
+            cell.dataset.r = r;
+            cell.dataset.c = c;
+            cell.dataset.i = idx;
+            cell.tabIndex = 0;
+            cell.addEventListener('click', onClickCell);
+            cell.addEventListener('contextmenu', onRightClickCell);
+            cell.addEventListener('keydown', onKeyDownCell);
+            boardEl.appendChild(cell);
+        }
+    }
+    render();
+}
+
+function render(){
+    for(let i=0;i<81;i++){
+        const el = boardEl.children[i];
+        el.classList.remove('given','selected','conflict');
+        el.innerHTML='';
+        const val = puzzle[i];
+        if(val!=null){
+            const vspan = document.createElement('div');
+            vspan.className='value';
+            vspan.textContent = val;
+            el.appendChild(vspan);
+            if(given[i]) el.classList.add('given');
+        } else {
+            // render notes if any
+            const s = notes[i];
+            if(s && s.size>0){
+                const notesBox = document.createElement('div');
+                notesBox.className = 'notes';
+                for(let n=1;n<=9;n++){
+                    const nspan = document.createElement('div');
+                    nspan.textContent = s.has(n)?n:'';
+                    notesBox.appendChild(nspan);
                 }
+                el.appendChild(notesBox);
             }
         }
+        if(i===selected) el.classList.add('selected');
+    }
+    highlightConflicts();
+}
 
-        function onKeyDown(e){
-            // Allow Digits 1-9, Backspace, Delete, Arrow keys
-            if (e.key.length===1 && /[1-9]/.test(e.key)) return;
-            if (['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab'].includes(e.key)) return;
-            e.preventDefault();
+function onClickCell(ev){
+    const idx = Number(this.dataset.i);
+    selectCell(idx);
+}
+
+function onRightClickCell(ev){
+    ev.preventDefault();
+    const idx = Number(this.dataset.i);
+    // clear cell (if not given)
+    if(given[idx]) return;
+    puzzle[idx]=null;
+    notes[idx].clear();
+    render();
+}
+
+function onKeyDownCell(ev){
+    const idx = Number(this.dataset.i);
+    if(ev.key>='1' && ev.key<='9'){ inputNumber(Number(ev.key)); ev.preventDefault(); return;}
+    if(ev.key==='Backspace' || ev.key==='Delete' || ev.key==='0'){ if(!given[selected]) {puzzle[selected]=null; notes[selected].clear(); render()} ev.preventDefault(); return;}
+    if(ev.key==='ArrowLeft'){ moveSelect(0,-1); ev.preventDefault(); }
+    if(ev.key==='ArrowRight'){ moveSelect(0,1); ev.preventDefault(); }
+    if(ev.key==='ArrowUp'){ moveSelect(-1,0); ev.preventDefault(); }
+    if(ev.key==='ArrowDown'){ moveSelect(1,0); ev.preventDefault(); }
+}
+
+function selectCell(idx){
+    selected = idx;
+    render();
+}
+
+function moveSelect(dr,dc){
+    if(selected<0) { selected=0; render(); return; }
+    const r = Math.floor(selected/9);
+    const c = selected%9;
+    let nr = (r+dr+9)%9;
+    let nc = (c+dc+9)%9;
+    selected = nr*9+nc;
+    render();
+}
+
+// number input handling
+function inputNumber(n){
+    if(selected<0) return;
+    if(given[selected]) return;
+    if(notesMode){
+        const s = notes[selected];
+        if(s.has(n)) s.delete(n); else s.add(n);
+    } else {
+        puzzle[selected] = n;
+        notes[selected].clear();
+    }
+    render();
+}
+
+// helpers for sudoku rules
+function rowIndex(i){ return Math.floor(i/9); }
+function colIndex(i){ return i%9; }
+function blockIndex(i){ const r=Math.floor(i/9), c=i%9; return Math.floor(r/3)*3+Math.floor(c/3); }
+function indicesInRow(r){ const a=[]; for(let c=0;c<9;c++) a.push(r*9+c); return a;}
+function indicesInCol(c){ const a=[]; for(let r=0;r<9;r++) a.push(r*9+c); return a;}
+function indicesInBlock(b){ const a=[]; const br=Math.floor(b/3), bc=b%3; for(let dr=0;dr<3;dr++) for(let dc=0;dc<3;dc++) a.push((br*3+dr)*9+(bc*3+dc)); return a; }
+
+function isConflictAt(i){
+    const v = puzzle[i];
+    if(v==null) return false;
+    const r = rowIndex(i), c = colIndex(i), b = blockIndex(i);
+    for(const j of indicesInRow(r)) if(j!==i && puzzle[j]===v) return true;
+    for(const j of indicesInCol(c)) if(j!==i && puzzle[j]===v) return true;
+    for(const j of indicesInBlock(b)) if(j!==i && puzzle[j]===v) return true;
+    return false;
+}
+
+function highlightConflicts(){
+    for(let i=0;i<81;i++){
+        const el = boardEl.children[i];
+        if(isConflictAt(i)) el.classList.add('conflict');
+        else el.classList.remove('conflict');
+    }
+}
+
+// solver: backtracking, can count solutions up to a limit
+function solveBoard(arr, countLimit=2){
+    const a = arr.slice();
+    const empties = [];
+    for(let i=0;i<81;i++) if(a[i]==null) empties.push(i);
+    // precompute peers fast
+    const peers = new Array(81);
+    for(let i=0;i<81;i++){
+        const set = new Set();
+        const r=rowIndex(i), c=colIndex(i), b=blockIndex(i);
+        indicesInRow(r).forEach(x=>set.add(x));
+        indicesInCol(c).forEach(x=>set.add(x));
+        indicesInBlock(b).forEach(x=>set.add(x));
+        set.delete(i);
+        peers[i] = Array.from(set);
+    }
+    // helper to get candidates for pos
+    function candidates(i){
+        if(a[i]!=null) return [];
+        const used = new Set();
+        peers[i].forEach(j=>{ if(a[j]!=null) used.add(a[j])});
+        const res=[];
+        for(let n=1;n<=9;n++) if(!used.has(n)) res.push(n);
+        return res;
+    }
+
+    // choose empty with fewest candidates (heuristic)
+    function pick(){
+        let best=-1, bestLen=10;
+        for(const i of empties){
+            if(a[i]!=null) continue;
+            const cands = candidates(i);
+            if(cands.length===0) return {pos:i, cands:[]};
+            if(cands.length < bestLen){ bestLen=cands.length; best=i; }
         }
+        if(best===-1) return null;
+        return {pos:best, cands:candidates(best)};
+    }
 
-        function onInput(e){
-            const input = e.target;
-            const r = +input.dataset.row;
-            const c = +input.dataset.col;
-            let v = input.value.replace(/[^1-9]/g, '');
-            if (v.length>1) v = v[0];
-            input.value = v;
+    let solutions = 0;
+    function backtrack(){
+        if(solutions>=countLimit) return;
+        const pickRes = pick();
+        if(pickRes===null){ solutions++; return; }
+        const {pos,cands} = pickRes;
+        if(cands.length===0) return;
+        for(const n of cands){
+            a[pos]=n;
+            backtrack();
+            a[pos]=null;
+            if(solutions>=countLimit) return;
+        }
+    }
+    backtrack();
+    return {count:solutions, solution: solutions>0 ? a.slice() : null};
+}
 
-            if (fixed[r][c]) {
-                // revert if attempt to change fixed cell
-                input.value = input.dataset.fixedValue || '';
-                return;
+// generator: generate full solution, then remove cells ensuring unique solution
+function generateSolution(){
+    const a = createEmpty(null);
+    // simple randomized backtracking
+    function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]] } }
+    const order = Array.from({length:81},(_,i)=>i);
+    // fill rows sequentially
+    function fill(idx=0){
+        if(idx>=81) return true;
+        const r = Math.floor(idx/9), c=idx%9;
+        if(a[idx]!=null) return fill(idx+1);
+        const nums = [1,2,3,4,5,6,7,8,9];
+        shuffle(nums);
+        for(const n of nums){
+            // check constraints
+            let ok=true;
+            for(let cc=0;cc<9;cc++) if(a[r*9+cc]===n) { ok=false; break;}
+            if(!ok) continue;
+            for(let rr=0;rr<9;rr++) if(a[rr*9+c]===n) { ok=false; break;}
+            if(!ok) continue;
+            const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+            for(let dr=0;dr<3;dr++) for(let dc=0;dc<3;dc++){
+                if(a[(br+dr)*9+(bc+dc)]===n) { ok=false; break; }
             }
-
-            validateAll();
+            if(!ok) continue;
+            a[idx]=n;
+            if(fill(idx+1)) return true;
+            a[idx]=null;
         }
+        return false;
+    }
+    fill(0);
+    return a;
+}
 
-        function setCell(r,c,val, isFixed=false){
-            const idx = r*SIZE + c;
-            const input = boardEl.children[idx].querySelector('input');
-            input.value = val ? String(val) : '';
-            fixed[r][c] = !!isFixed;
-            if (isFixed) {
-                boardEl.children[idx].classList.add('fixed');
-                input.dataset.fixedValue = input.value;
-            } else {
-                boardEl.children[idx].classList.remove('fixed');
-                delete input.dataset.fixedValue;
-            }
+function makePuzzle(cluesTarget=28){
+    // generate full solution
+    solution = generateSolution();
+    // start with full puzzle
+    puzzle = solution.slice();
+    given = createEmpty(false);
+    for(let i=0;i<81;i++){ given[i]=true; }
+
+    // attempt to remove cells while keeping unique solution
+    const indices = Array.from({length:81},(_,i)=>i);
+    // shuffle indices to randomize removal order
+    for(let i=indices.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [indices[i],indices[j]]=[indices[j],indices[i]] }
+    let removals = 81 - cluesTarget;
+    for(const idx of indices){
+        if(removals<=0) break;
+        // temporarily remove
+        const backup = puzzle[idx];
+        puzzle[idx]=null;
+        given[idx]=false;
+        // also clear notes
+        notes[idx].clear();
+        // test uniqueness
+        const res = solveBoard(puzzle, 2);
+        if(res.count!==1){
+            // revert
+            puzzle[idx]=backup;
+            given[idx]=true;
+        } else {
+            removals--;
         }
+    }
+    // finalise
+    // ensure puzzle has exactly cluesTarget or slightly more (if uniqueness prevented further removals)
+    // clear selected
+    selected = -1;
+    render();
+}
 
-        // Prüft, ob value an (row,col) erlaubt ist (ignoriere die Zelle selbst beim Vergleich)
-        function isValid(value, row, col) {
-            if (!/^[1-9]$/.test(value)) return false;
-            // Zeile
-            for (let c=0;c<SIZE;c++){
-                if (c===col) continue;
-                const v = getCellValue(row,c);
-                if (v === value) return false;
-            }
-            // Spalte
-            for (let r=0;r<SIZE;r++){
-                if (r===row) continue;
-                const v = getCellValue(r,col);
-                if (v === value) return false;
-            }
-            // Box
-            const br = Math.floor(row/3)*3;
-            const bc = Math.floor(col/3)*3;
-            for (let r=br;r<br+3;r++){
-                for (let c=bc;c<bc+3;c++){
-                    if (r===row && c===col) continue;
-                    const v = getCellValue(r,c);
-                    if (v === value) return false;
-                }
-            }
-            return true;
-        }
+// UI wiring
+document.getElementById('newEasy').addEventListener('click', ()=>makePuzzle(Number(cluesRange.value) + 6));
+document.getElementById('newMed').addEventListener('click', ()=>makePuzzle(Number(cluesRange.value)));
+document.getElementById('newHard').addEventListener('click', ()=>makePuzzle(Number(cluesRange.value) - 6));
+document.getElementById('solve').addEventListener('click', ()=>{
+    puzzle = solution.slice();
+    render();
+});
+document.getElementById('check').addEventListener('click', ()=>{
+    // check completeness and correctness
+    for(let i=0;i<81;i++){
+        if(puzzle[i]==null){ alert('Das Sudoku ist noch nicht vollständig.'); return; }
+        if(isConflictAt(i)){ alert('Konflikte gefunden. Bitte korrigieren.'); return; }
+    }
+    // verify against solution
+    const res = solveBoard(puzzle,2);
+    if(res.count===1){ alert(''); }
+    else alert('Achtung: Mehrfachlösungen oder Fehler.');
+});
+document.getElementById('clear').addEventListener('click', ()=>{
+    // reset to initial puzzle (given cells remain)
+    for(let i=0;i<81;i++){
+        if(!given[i]) puzzle[i]=null;
+        notes[i].clear();
+    }
+    selected=-1;
+    render();
+});
+document.getElementById('cluesRange').addEventListener('input', ()=>{/* nothing special */});
+document.getElementById('notesToggle').addEventListener('change', (e)=>{ notesMode = e.target.checked; });
 
-        function getCellValue(r,c){
-            const idx = r*SIZE + c;
-            return boardEl.children[idx].querySelector('input').value || '';
-        }
+// number buttons
+const numbersRow = document.getElementById('numbersRow');
+for(let n=1;n<=9;n++){
+    const btn = document.createElement('button');
+    btn.textContent = n;
+    btn.addEventListener('click', ()=>{ if(selected<0) return; inputNumber(n); });
+    numbersRow.appendChild(btn);
+}
 
-        function validateAll(){
-            let anyInvalid = false;
-            for (let r=0;r<SIZE;r++){
-                for (let c=0;c<SIZE;c++){
-                    const idx = r*SIZE + c;
-                    const wrapper = boardEl.children[idx];
-                    const input = wrapper.querySelector('input');
-                    const v = input.value;
-                    if (v && !isValid(v,r,c)) {
-                        wrapper.classList.add('invalid');
-                        anyInvalid = true;
-                    } else {
-                        wrapper.classList.remove('invalid');
-                    }
-                }
-            }
-            updateStatus();
-            return !anyInvalid;
-        }
+// initial setup
+for(let i=0;i<81;i++) notes[i].clear();
+buildGrid();
+makePuzzle(28);
 
-        function checkComplete(){
-            // Vollständig + keine Invalid-Markierungen
-            for (let r=0;r<SIZE;r++){
-                for (let c=0;c<SIZE;c++){
-                    const v = getCellValue(r,c);
-                    if (!v) return false;
-                    if (!isValid(v,r,c)) return false;
-                }
-            }
-            return true;
-        }
-
-        function updateStatus(){
-            if (checkComplete()) {
-                statusEl.textContent = 'Status: Sudoku vollständig und korrekt gelöst ✅';
-            } else {
-                // check if any invalid
-                const anyInvalid = [...boardEl.children].some(w => w.classList.contains('invalid'));
-                if (anyInvalid) statusEl.textContent = 'Status: Regelverletzungen vorhanden ✖';
-                else statusEl.textContent = 'Status: Ungelöst — keine offensichtlichen Regelverletzungen';
-            }
-        }
-
-        function clearBoard(){
-            for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) setCell(r,c,'',false);
-            validateAll();
-        }
-
-        // Beispiel-Puzzle (0 = leer)
-        const example = [
-            [5,3,0, 0,7,0, 0,0,0],
-            [6,0,0, 1,9,5, 0,0,0],
-            [0,9,8, 0,0,0, 0,6,0],
-
-            [8,0,0, 0,6,0, 0,0,3],
-            [4,0,0, 8,0,3, 0,0,1],
-            [7,0,0, 0,2,0, 0,0,6],
-
-            [0,6,0, 0,0,0, 2,8,0],
-            [0,0,0, 4,1,9, 0,0,5],
-            [0,0,0, 0,8,0, 0,7,9]
-        ];
-
-        function loadExample(puz){
-            clearBoard();
-            for (let r=0;r<SIZE;r++){
-                for (let c=0;c<SIZE;c++){
-                    const v = puz[r][c];
-                    if (v) setCell(r,c,v,true);
-                }
-            }
-            validateAll();
-        }
-
-        // Buttons
-        document.getElementById('resetBtn').addEventListener('click', ()=>{ clearBoard(); statusEl.textContent='Status: Leeres Brett'; });
-        document.getElementById('exampleBtn').addEventListener('click', ()=>{ loadExample(example); statusEl.textContent='Status: Beispiel geladen'; });
-        document.getElementById('validateBtn').addEventListener('click', ()=>{ const ok = validateAll(); statusEl.textContent = ok ? 'Prüfung: Keine Regelverletzungen gefunden' : 'Prüfung: Regelverletzungen vorhanden'; });
-
-        // Initialize
-        createBoard();
-        clearBoard();
-    </script>
+</script>
 </body>
 </html>
