@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sudoku — Logisches Rätsel</title>
+<title>Sudoku</title>
 <style>
     :root{
         --cell-size: 56px;
@@ -16,18 +16,17 @@
         --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
     }
     html,body{height:100%;margin:0;font-family:var(--font-sans);background:var(--bg);display:flex;align-items:center;justify-content:center}
-    .container{width:calc(var(--cell-size)*9 + 20px);padding:10px;background:white;border-radius:8px;box-shadow:0 6px 20px rgba(20,20,40,0.08)}
+    .container{width:calc(var(--cell-size)*9 + 4px);padding:10px;background:white;border-radius:8px;box-shadow:0 6px 20px rgba(20,20,40,0.08)}
     h1{margin:0 0 10px;font-size:18px;text-align:center}
     .board{display:grid;grid-template-columns:repeat(9,var(--cell-size));grid-template-rows:repeat(9,var(--cell-size));gap:var(--gap);border:2px solid #222;margin:6px auto}
     .cell{
         box-sizing:border-box;border:1px solid rgba(0,0,0,0.12);width:var(--cell-size);height:var(--cell-size);
         display:flex;align-items:center;justify-content:center;position:relative;background:white;cursor:pointer;
     }
-    /* block thicker borders */
-    .cell[data-r="2"], .cell[data-r="5"]{border-bottom-width:2px}
-    .cell[data-c="2"], .cell[data-c="5"]{border-right-width:2px}
+    .cell[data-r="2"], .cell[data-r="5"]{border-bottom-width:4px}
+    .cell[data-c="2"], .cell[data-c="5"]{border-right-width:4px}
     .given{background:var(--given-bg);font-weight:700}
-    .selected{background:var(--sel-bg);outline:2px solid rgba(0,0,0,0.05)}
+    .selected{background:var(--sel-bg);outline: none}
     .conflict{background:var(--conflict-bg)}
     .value{font-size:20px;user-select:none}
     .controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:8px}
@@ -44,19 +43,19 @@
 </head>
 <body>
 <div class="container" role="application" aria-label="Sudoku">
-    <h1>Sudoku — Logisch lösen</h1>
+    <h1>Sudoku</h1>
     <div id="board" class="board" aria-hidden="false"></div>
 
     <div class="controls">
-        <button id="newEasy">Neu (einfach)</button>
-        <button id="newMed">Neu (mittel)</button>
-        <button id="newHard">Neu (schwer)</button>
-        <button id="solve" class="btn-primary">Lösen</button>
+        <button id="newEasy">Einfach</button>
+        <button id="newMed">Mittel</button>
+        <button id="newHard">Schwer</button>
+        <button id="solve" class="btn-primary">Lösung</button>
         <button id="check">Prüfen</button>
         <button id="clear" class="btn-danger">Zurücksetzen</button>
         <label class="toggle"><input id="notesToggle" type="checkbox"> Notizen</label>
         <div style="display:flex;gap:4px;align-items:center">
-            <span class="small">Leeren entfernen</span>
+            <span class="small">Schwierigkeit anpassen</span>
             <input id="cluesRange" type="range" min="22" max="36" value="28">
         </div>
     </div>
@@ -69,7 +68,7 @@
     </div>
 
     <div style="display:flex;gap:4px;justify-content:center;margin-top:8px" id="numbersRow"></div>
-    <div class="footer">Klicken = Zahl setzen / Notizen. Rechtsklick löscht. Die Erzeugung garantiert eindeutige Lösung (backtracking).</div>
+    <div class="footer">Linksklick = Feld auswählen; Rechtsklick = Eingaben löschen</div>
 </div>
 
 <script>
@@ -373,8 +372,8 @@ document.getElementById('solve').addEventListener('click', ()=>{
 document.getElementById('check').addEventListener('click', ()=>{
     // check completeness and correctness
     for(let i=0;i<81;i++){
-        if(puzzle[i]==null){ alert('Das Sudoku ist noch nicht vollständig.'); return; }
-        if(isConflictAt(i)){ alert('Konflikte gefunden. Bitte korrigieren.'); return; }
+        if(puzzle[i]==null){ alert('Dein Arsch ist noch NICHT fertig'); return; }
+        if(isConflictAt(i)){ alert('Falsch wie zau'); return; }
     }
     // verify against solution
     const res = solveBoard(puzzle,2);
@@ -410,3 +409,65 @@ makePuzzle(28);
 </script>
 </body>
 </html>
+<style>
+/* Remove default focus ring/outline on cells when they receive keyboard input */
+.cell:focus,
+.cell:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+</style>
+<style>
+/* remove the black focus ring from buttons */
+button:focus,
+button:focus-visible,
+button:active {
+    outline: none;
+    box-shadow: none;
+}
+/* Firefox inner focus */
+button::-moz-focus-inner {
+    border: 0;
+}
+/* mobile tap highlight */
+button {
+    -webkit-tap-highlight-color: transparent;
+}
+/* remove focus ring on inputs (checkbox/range) when they keep focus while typing */
+input[type="range"]:focus,
+input[type="range"]:focus-visible,
+input[type="checkbox"]:focus,
+input[type="checkbox"]:focus-visible,
+#cluesRange:focus,
+#cluesRange:focus-visible,
+#notesToggle:focus,
+#notesToggle:focus-visible,
+.toggle input:focus,
+.toggle input:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+</style>
+<script>
+(function(){
+    const btn = document.getElementById('check');
+    if(!btn) return;
+    // replace element to remove existing anonymous listeners, then attach corrected handler
+    const clone = btn.cloneNode(true);
+    btn.parentNode.replaceChild(clone, btn);
+    clone.addEventListener('click', ()=>{
+        for(let i=0;i<81;i++){
+            if(puzzle[i]==null){ alert('Das Werk ist noch nicht vollendet'); return; }
+            if(isConflictAt(i)){ alert('Erst denken, dann schreiben'); return; }
+        }
+        const res = solveBoard(puzzle,2);
+        if(res.count===1){
+            alert('Richtig. Gut gemacht!');
+        } else {
+            alert('Erst denken, dann schreiben');
+        }
+    });
+})();
+</script>
+<style>
+</style>
