@@ -458,13 +458,13 @@ input[type="checkbox"]:focus-visible,
     clone.addEventListener('click', ()=>{
         for(let i=0;i<81;i++){
             if(puzzle[i]==null){ alert('Noch nicht vollständig ausgefüllt.'); return; }
-            if(isConflictAt(i)){ alert('Fehlerhaftig!'); return; }
+            if(isConflictAt(i)){ alert('Fehlerhaft.'); return; }
         }
         const res = solveBoard(puzzle,2);
         if(res.count===1){
             alert('Richtig. Gut gemacht!');
         } else {
-            alert('Fehlerhaftig!');
+            alert('Fehlerhaft.');
         }
     });
 })();
