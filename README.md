@@ -1,2 +1,1 @@
-# Sudoku
-test
+Sudoku
